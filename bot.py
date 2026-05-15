@@ -261,7 +261,7 @@ def obtenerClima(ciudad, filtros):
 
     geo_res = requests.get(
         f"https://geocoding-api.open-meteo.com/v1/search?"
-        f"name={limpiar_texto(ciudad)}&count=10",
+        f"name={limpiar_texto(ciudad)}&count=10&language=es",
         timeout=10
     ).json()
 
