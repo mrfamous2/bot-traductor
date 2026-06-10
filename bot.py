@@ -597,16 +597,14 @@ async def on_message(message):
             ram_usage_text = f"{round(ram.used / 1024 ** 3, 2)} GB"
             ram_total_text = f"{round(ram.total / 1024 ** 3, 2)} GB"
 
-            if hasattr(os, "getloadavg")
-
-            else "📈 Load: no disponible"
-        )
+        if hasattr(os, "getloadavg"):
+            load_text = f"{round(os.getloadavg()[0], 2)} (1m)"
+        else:
+            load_text = "No disponible"
 
         # =========================
         # TEMPERATURA CPU
         # =========================
-
-        temperatura = "No disponible"
 
         try:
             temps = psutil.sensors_temperatures()
@@ -636,6 +634,7 @@ async def on_message(message):
             f"🧠 CPU: {cpu}%\n"
             f"🌡️ Temp CPU: {temp_cpu}\n"
             f"💾 Uso de RAM: {ram.percent}% ({ram_usage_text}) | RAM Total: {ram_total_text} \n"
+            f"📈 Load: {load_text}"
         )
 
         return
