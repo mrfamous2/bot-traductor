@@ -573,13 +573,17 @@ async def on_message(message):
             time.time() - start_time
         )
 
-        h = uptime_seconds // 3600
+        dias = uptime_seconds // 86400  # 86400 segundos tiene un día
+        horas_residuo = uptime_seconds % 86400
 
-        m = (
-            uptime_seconds % 3600
-        ) // 60
+        h = horas_residuo // 3600
+        m = (horas_residuo % 3600) // 60
+        s = horas_residuo % 60
 
-        s = uptime_seconds % 60
+        if dias > 0:
+            uptime_str = f"{dias}d {h}h {m}m"
+        else:
+            uptime_str = f"{h}h {m}m {s}s"
 
         cpu = psutil.cpu_percent(
             interval=1
@@ -630,10 +634,7 @@ async def on_message(message):
         await message.channel.send(
 
             f"📊 **Estado del bot:**\n"
-
-            f"⏱️ Uptime: "
-            f"{h}h {m}m {s}s\n"
-
+            f"⏱️ Uptime: {uptime_str}\n"
             f"🧠 CPU: {cpu}%\n"
 
             f"🌡️ Temp CPU: "
