@@ -609,42 +609,32 @@ async def on_message(message):
         temperatura = "No disponible"
 
         try:
-
             temps = psutil.sensors_temperatures()
-
             if temps:
-
-                for nombre, entradas in temps.items():
-
-                    if entradas:
-
-                        temp_actual = entradas[0].current
-
-                        temperatura = (
-                            f"{temp_actual}°C "
-                            f"({nombre})"
-                        )
-
-                        break
-
-        except Exception as e:
-
-            print(e)
+                # Si es una Raspberry Pi, vamos directo a buscar cpu_thermal
+                if "cpu_thermal" in temps and temps["cpu_thermal"]:
+                    temp_actual = temps["cpu_thermal"][0].current
+                    temp_cpu = f"{temp_actual}°C (cpu_thermal)"
+                # Caso contrario se itera en las temperaturas y toma el primer elemento
+                else:
+                    for nombre, entradas in temps.items():
+                        if entradas:
+                            temp_actual = entradas[0].current
+                            temp_cpu = f"{temp_actual}°C ({nombre})"
+                            break
+                    else:
+                        temp_cpu = "No disponible"
+            else:
+                temp_cpu = "No disponible"
+        except Exception:
+            temp_cpu = "No disponible"
 
         await message.channel.send(
 
             f"📊 **Estado del bot:**\n"
             f"⏱️ Uptime: {uptime_str}\n"
             f"🧠 CPU: {cpu}%\n"
-
-            f"🌡️ Temp CPU: "
-            f"{temperatura}\n"
-
-            f"💾 RAM: "
-            f"{ram.percent}% "
-            f"({round(ram.used / (1024**3), 2)} GB)\n"
-
-            f"{load_text}"
+            f"🌡️ Temp CPU: {temp_cpu}\n"
         )
 
         return
