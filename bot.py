@@ -611,9 +611,9 @@ def obtener_botstats():
     # =========================
 
     if hasattr(os, "getloadavg"):
-        load_text = f"📈 Load: {round(os.getloadavg()[0], 2)} (1m)"
+        load_text = f"{round(os.getloadavg()[0], 2)} (1m)"
     else:
-        load_text = "📈 Load: no disponible"
+        load_text = "No disponible"
 
     return (
         f"📊 **Estado del bot:**\n"
