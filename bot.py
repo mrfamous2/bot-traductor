@@ -543,6 +543,86 @@ def obtener_voyager(nombre_sonda, command_id):
         print(e)
 
         return "⚠️ Error obteniendo datos Voyager."
+    
+def obtener_botstats():
+    uptime_seconds = int(time.time() - start_time)
+
+    # =========================
+    # HORAS UPTIME
+    # =========================
+
+    # Calculamos los dias, y el residuo va a las horas
+    dias = uptime_seconds // 86400  # 86400 segundos tiene un día
+    horas_residuo = uptime_seconds % 86400
+
+    h = horas_residuo // 3600
+    m = (horas_residuo % 3600) // 60
+    s = horas_residuo % 60
+
+    if dias > 0:
+        uptime_str = f"{dias}d {h}h {m}m"
+    else:
+        uptime_str = f"{h}h {m}m {s}s"
+
+    # =========================
+    # CPU
+    # =========================
+
+    cpu = psutil.cpu_percent(interval=1)
+
+    # =========================
+    # TEMPERATURA CPU
+    # =========================
+    try:
+        temps = psutil.sensors_temperatures()
+        if temps:
+            # Si es una Raspberry Pi, vamos directo a buscar cpu_thermal
+            if "cpu_thermal" in temps and temps["cpu_thermal"]:
+                temp_actual = temps["cpu_thermal"][0].current
+                temp_cpu = f"{temp_actual}°C (cpu_thermal)"
+            # Caso contrario se itera en las temperaturas y toma el primer elemento
+            else:
+                for nombre, entradas in temps.items():
+                    if entradas:
+                        temp_actual = entradas[0].current
+                        temp_cpu = f"{temp_actual}°C ({nombre})"
+                        break
+                else:
+                    temp_cpu = "No disponible"
+        else:
+            temp_cpu = "No disponible"
+    except Exception:
+        temp_cpu = "No disponible"
+
+    # =========================
+    # RAM
+    # =========================
+    
+    ram = psutil.virtual_memory()
+    if ram.used < 1024 ** 3:
+        ram_usage_text = f"{round(ram.used / (1024 ** 2), 1)} MB"
+        ram_total_text = f"{round(ram.total / (1024 ** 2), 1)} MB"
+    else:
+        ram_usage_text = f"{round(ram.used / 1024 ** 3, 2)} GB"
+        ram_total_text = f"{round(ram.total / 1024 ** 3, 2)} GB"
+
+    # =========================
+    # CARGA
+    # =========================
+
+    if hasattr(os, "getloadavg"):
+        load_text = f"📈 Load: {round(os.getloadavg()[0], 2)} (1m)"
+    else:
+        load_text = "📈 Load: no disponible"
+
+    return (
+        f"📊 **Estado del bot:**\n"
+        f"⏱️ Uptime: {uptime_str}\n"
+        f"🧠 CPU: {cpu}%\n"
+        f"🌡️ Temp CPU: {temp_cpu}\n"
+        f"💾 Uso de RAM: {ram.percent}% ({ram_usage_text}) | RAM Total: {ram_total_text} \n"
+        f"📈 Load: {load_text}"
+    )
 
 # =========================
 # BOT LISTO
@@ -569,82 +649,7 @@ async def on_message(message):
 
     if message.content.startswith('!botstats'):
 
-        uptime_seconds = int(
-            time.time() - start_time
-        )
-
-        h = uptime_seconds // 3600
-
-        m = (
-            uptime_seconds % 3600
-        ) // 60
-
-        s = uptime_seconds % 60
-
-        cpu = psutil.cpu_percent(
-            interval=1
-        )
-
-        ram = psutil.virtual_memory()
-
-        load_text = (
-
-            f"📈 Load: "
-            f"{round(os.getloadavg()[0], 2)} "
-            f"(1m)"
-
-            if hasattr(os, "getloadavg")
-
-            else "📈 Load: no disponible"
-        )
-
-        # =========================
-        # TEMPERATURA CPU
-        # =========================
-
-        temperatura = "No disponible"
-
-        try:
-
-            temps = psutil.sensors_temperatures()
-
-            if temps:
-
-                for nombre, entradas in temps.items():
-
-                    if entradas:
-
-                        temp_actual = entradas[0].current
-
-                        temperatura = (
-                            f"{temp_actual}°C "
-                            f"({nombre})"
-                        )
-
-                        break
-
-        except Exception as e:
-
-            print(e)
-
-        await message.channel.send(
-
-            f"📊 **Estado del bot:**\n"
-
-            f"⏱️ Uptime: "
-            f"{h}h {m}m {s}s\n"
-
-            f"🧠 CPU: {cpu}%\n"
-
-            f"🌡️ Temp CPU: "
-            f"{temperatura}\n"
-
-            f"💾 RAM: "
-            f"{ram.percent}% "
-            f"({round(ram.used / (1024**3), 2)} GB)\n"
-
-            f"{load_text}"
-        )
+        await message.channel.send(obtener_botstats())
 
         return
 
