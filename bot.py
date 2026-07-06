@@ -19,6 +19,9 @@ logging.basicConfig(
     format="[%(levelname)s] %(message)s"
 )
 
+# Se ignoran logs INFO de discord. Solo mostrara WARNING y ERROR
+logging.getLogger("discord.gateway").setLevel(logging.WARNING)
+
 logger = logging.getLogger("NozomiBot")
 
 start_time = time.time()
