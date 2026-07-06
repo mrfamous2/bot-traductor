@@ -142,6 +142,27 @@ def limpiar_texto(texto):
     return texto.lower().translate(trans).strip()
 
 # =========================
+# BOT TRADUCTOR
+# =========================
+
+# =========================
+# TRADUCTOR GOOGLE
+# =========================
+def traductor_google(idioma, texto):
+
+    traduccion = GoogleTranslator(
+        source='auto',
+        target=idioma
+        ).translate(texto)
+    return traduccion
+
+# =========================
+# TRADUCTOR DEEPL
+# =========================
+def traductor_deepl(idioma, texto):
+    return
+
+# =========================
 # BOT CLIMA
 # =========================
 
@@ -470,41 +491,31 @@ async def on_message(message):
     # =========================
     if message.content.startswith('!t '):
 
-        args = message.content.split(' ')
-
-        if len(args) < 3:
-
-            await message.channel.send(
-                "Uso: `!t <idioma> <texto>`"
-            )
-
-            return
-
-        idioma = args[1]
-
-        texto = ' '.join(args[2:])
-
         try:
+            args = message.content.split(' ')
+            if len(args) < 3:
+                await message.channel.send("Uso: `!t <idioma> <texto>`")
+                return
 
-            traduccion = GoogleTranslator(
+            idioma = args[1]
 
-                source='auto',
+            texto = ' '.join(args[2:])
 
-                target=idioma
+            traduccion = traductor_google(idioma, texto)
 
-            ).translate(texto)
+            logger.info(f"Bot Traductor: Idioma: '{idioma}' | Texto: '{texto[:50]}...'")
+            await message.channel.send(f"🌐 ({idioma}) {traduccion}")
 
-            await message.channel.send(
-                f"🌐 ({idioma}) {traduccion}"
-            )
-
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response else "Desconocido"
+            logger.warning(f"Bot Traductor: Error HTTP {status} detectado en la traducción para el idioma '{idioma}'")
+            await message.channel.send("⚠️ Error al traducir")
+        except requests.exceptions.Timeout:
+            logger.error(f"Bot Traductor: Timeout de red esperando respuesta en la traducción para '{idioma}'")
+            await message.channel.send("⏳ La consulta tardó demasiado. Intentelo denuevo")
         except Exception as e:
-
-            print(e)
-
-            await message.channel.send(
-                "⚠️ Error al traducir"
-            )
+            logger.exception(f"Bot Traductor: Error imprevisto en el orquestador de traducción: {e}")
+            await message.channel.send("💥 Error con el bot de traducción")
 
         return
 
