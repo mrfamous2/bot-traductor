@@ -142,6 +142,27 @@ def limpiar_texto(texto):
     return texto.lower().translate(trans).strip()
 
 # =========================
+# BOT TRADUCTOR
+# =========================
+
+# =========================
+# TRADUCTOR GOOGLE
+# =========================
+def traductor_google(idioma, texto):
+
+    traduccion = GoogleTranslator(
+        source='auto',
+        target=idioma
+        ).translate(texto)
+    return traduccion
+
+# =========================
+# TRADUCTOR DEEPL
+# =========================
+def traductor_deepl(idioma, texto):
+    return
+
+# =========================
 # BOT CLIMA
 # =========================
 
