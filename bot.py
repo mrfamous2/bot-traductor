@@ -8,8 +8,18 @@ import logging
 
 from dotenv import load_dotenv
 from deep_translator import GoogleTranslator
+from discord.ext import tasks, commands
 
 load_dotenv()
+start_time = time.time()
+
+# =========================
+# CONFIGURACION DISCORD
+# =========================
+intents = discord.Intents.default()
+intents.message_content = True
+
+client = discord.Client(intents=intents)
 
 # =========================
 # CONFIGURACION LOGGER
@@ -24,12 +34,32 @@ logging.getLogger("discord.gateway").setLevel(logging.WARNING)
 
 logger = logging.getLogger("NozomiBot")
 
-start_time = time.time()
+# =========================
+# CONFIGURACION CACHE
+# =========================
+CACHE_CIUDADES = []
+TTL_CIUDADES = 86400 # 24 horas en segundos
 
-intents = discord.Intents.default()
-intents.message_content = True
+# =========================
+# LIMPIEZA CACHE
+# =========================
+@tasks.loop(hours=1)
+async def limpiar_cache_ciudades():
+    global CACHE_CIUDADES
+    ahora = time.time()
+    largo_anterior = len(CACHE_CIUDADES)
+    CACHE_CIUDADES = [
+        ciudad for ciudad in CACHE_CIUDADES
+        if (ahora - ciudad.get("created_at", 0)) < TTL_CIUDADES
+    ]
 
-client = discord.Client(intents=intents)
+    eliminados = largo_anterior - len(CACHE_CIUDADES)
+    if eliminados > 0:
+        logger.info(f"Limpieza de cache: Se eliminaron {eliminados} registros inactivos del cache de ciudades")
+
+@limpiar_cache_ciudades.before_loop
+async def antes_de_limpiar():
+    await client.wait_until_ready()
 
 # =========================
 # HELPERS CLIMA
@@ -169,49 +199,89 @@ def traductor_deepl(idioma, texto):
 # =========================
 # OBTENER COORDENADAS
 # =========================
-def obtener_ciudad(ciudad, filtros):
-    res = requests.get(
-        f"https://geocoding-api.open-meteo.com/v1/search?name={limpiar_texto(ciudad)}&count=10&language=es",
-        timeout=10
-    )
+def obtener_ciudad(nombre_ciudad, filtros):
+    logger.info(f"Capa Ciudad: Solicitando coordenadas para '{nombre_ciudad}'")
 
-    # Si no es codigo 2xx arroja error
-    res.raise_for_status()
-
-    # Convierte respuesta a JSON
-    response = res.json()
-    
-    # Devuelve un array vacio si no hay ciudades
-    if "results" not in response or not response["results"]:
-        return []
-    
-    ciudades = response["results"]
-
-    # Quitamos el registro que es un pais (id es igual a country_id)
-    ciudades = [r for r in ciudades if r.get("id") != r.get("country_id")]
-
-    # Quitamos los registros que no estan relacionados a un pais (country o country_id no existen en el elemento)
-    ciudades = [r for r in ciudades if "country" in r or "country_id" in r]
-
-    # Quitamos los registros que no contienen el nombre de la ciudad
-    ciudades = [r for r in ciudades if limpiar_texto(ciudad) in limpiar_texto(r.get("name"))]
-
-    # Si ciudades tiene mas de un 1 registro y hay filtros, filtramos segun los filtros
-    if len(ciudades) > 1 and filtros:
+    # Funcion para filtrar la ciudad y ver si cumple con la busqueda
+    def filtro_ciudad(ciudad, nombre, filtros):
+        if limpiar_texto(nombre) not in limpiar_texto(ciudad.get("name")):
+            return None
+        
+        if not filtros:
+            return ciudad
+        
         for filtro in filtros:
-            ciudades = [
-                r for r in ciudades
-                if limpiar_texto(filtro.lower()) in limpiar_texto(r.get("country").lower())
-                or limpiar_texto(filtro.lower()) in limpiar_texto(r.get("country_code").lower())
-                or "admin1" in r and limpiar_texto(filtro.lower()) in limpiar_texto(r.get("admin1").lower())
-                or "admin2" in r and limpiar_texto(filtro.lower()) in limpiar_texto(r.get("admin2").lower())
-                or "admin3" in r and limpiar_texto(filtro.lower()) in limpiar_texto(r.get("admin3").lower())
-            ]
+            filtro_norm = limpiar_texto(filtro.lower())
+            coincide_pais = filtro_norm in limpiar_texto(ciudad.get("country", "").lower())
+            coincide_admin1 = filtro_norm in limpiar_texto(ciudad.get("admin1", "").lower())
+            coincide_admin2 = filtro_norm in limpiar_texto(ciudad.get("admin2", "").lower())
+            coincide_admin3 = filtro_norm in limpiar_texto(ciudad.get("admin3", "").lower())
+            if not (coincide_pais or coincide_admin1 or coincide_admin2 or coincide_admin3):
+                return None
+            
+        return ciudad
 
-    # Si ciudades tiene mas de un 1 registro, filtramos todo que no sea una ciudad con feature_code PPL o similar
-    # Solo en caso de que el registro sea solo 1 lo dejamos pasar solo por curiosidad (porque existe Viña Del Mar Airport y Tokyo Disney Land)
-    if len(ciudades) > 1:
-        ciudades = [r for r in ciudades if "PPL" in r.get("feature_code", "PPL")]
+    # Variable a retornar
+    ciudades = []
+
+    # 1. Primero buscar en cache. Si existe, actualizamos su TTL (Sliding Expiration)
+    if CACHE_CIUDADES:
+        for ciudad in CACHE_CIUDADES:
+            if filtro_ciudad(ciudad, nombre_ciudad, filtros):
+                ciudad["created_at"] = time.time()
+                ciudades.append(ciudad)
+    
+    # 2. Si no se encontraron coincidencias válidas en caché, se consulta la API
+    if not ciudades:
+        res = requests.get(
+            f"https://geocoding-api.open-meteo.com/v1/search?name={limpiar_texto(nombre_ciudad)}&count=10&language=es",
+            timeout=5
+        )
+        res.raise_for_status()
+        response = res.json()
+
+        if "results" not in response or not response["results"]:
+            return []
+    
+        ciudades = []
+
+        # Limpiamos la respuesta de la API
+        for r in response["results"]:
+            if "country" not in r and "country_id" not in r:
+                continue
+            if r.get("id") == r.get("country_id"):
+                continue
+
+            ciudad = {
+                "id": r.get("id"),
+                "name": r.get("name"),
+                "latitude": r.get("latitude"),
+                "longitude": r.get("longitude"),
+                "country": r.get("country"),
+                "feature_code": r.get("feature_code", ""),
+                "admin1": r.get("admin1", ""),            
+                "admin2": r.get("admin2", ""),            
+                "admin3": r.get("admin3", ""),            
+                "created_at": time.time()
+            }
+
+            if filtro_ciudad(ciudad, nombre_ciudad, filtros):
+                ciudades.append(ciudad)     
+
+            # Buscamos si la ciudad ya existía previamente en el caché por su ID
+            ciudad_existente = next((c for c in CACHE_CIUDADES if c.get("id") == ciudad["id"]), None)
+            
+            if ciudad_existente:
+                # Si ya existía, solo actualizamos su estampa de tiempo para que no expire
+                ciudad_existente["created_at"] = time.time()
+            else:
+                # Si es completamente nueva, la añadimos al caché global
+                CACHE_CIUDADES.append(ciudad)
+
+        # Si ciudades tiene mas de un 1 registro, priorizamos entidades PPL
+        # Ya que existen lugares especificos y en caso de encontrarlos, pues lo mostramos
+        if len(ciudades) > 1:
+            ciudades = [r for r in ciudades if "PPL" in r.get("feature_code", "PPL")]
 
     return ciudades
 
@@ -466,7 +536,11 @@ def obtener_botstats():
 @client.event
 async def on_ready():
 
-    print(f'Bot conectado como {client.user}')
+    logger.info(f'Bot conectado como {client.user}')
+
+    if not limpiar_cache_ciudades.is_running():
+        limpiar_cache_ciudades.start()
+        logger.info("Temporizador de limpieza de caché iniciado con éxito.")
 
 # =========================
 # MENSAJES
@@ -589,6 +663,7 @@ async def on_message(message):
     # =========================
     if message.content.startswith("!clima"):
         try:
+            inicio = time.perf_counter()
             contenido = message.content
             mensaje_procesado = ' '.join(contenido.split(' ')[1:]).strip()
             if not mensaje_procesado:
@@ -662,9 +737,12 @@ async def on_message(message):
             nombre_completo = f"{ciudad_limpia.get("nombre")}, {ciudad_limpia.get("region")}, {ciudad_limpia.get("pais")}" if ciudad_limpia.get("region") else f"{ciudad_limpia.get("nombre")}, {ciudad_limpia.get("pais")}"
             clima = formato_clima(nombre_completo, clima_response.get("current"), clima_response.get("daily"))
 
-            logger.info(f"Bot Clima: Renderizado exitoso para {nombre_completo}")
             await message.channel.send(clima)
-
+            
+            fin = time.perf_counter()
+            tiempo_total = fin - inicio
+            logger.info(f"Bot Clima: Renderizado exitoso para {nombre_completo}. Ejecucion en {tiempo_total:.4f} segundos.")
+            
             return
 
         except requests.exceptions.HTTPError as e:
