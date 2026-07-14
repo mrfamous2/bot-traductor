@@ -8,6 +8,7 @@ import logging
 
 from dotenv import load_dotenv
 from deep_translator import GoogleTranslator
+from discord.ext import tasks, commands
 
 load_dotenv()
 start_time = time.time()
@@ -42,6 +43,7 @@ TTL_CIUDADES = 86400 # 24 horas en segundos
 # =========================
 # LIMPIEZA CACHE
 # =========================
+@tasks.loop(hours=1)
 async def limpiar_cache_ciudades():
     global CACHE_CIUDADES
     ahora = time.time()
@@ -55,6 +57,7 @@ async def limpiar_cache_ciudades():
     if eliminados > 0:
         logger.info(f"Limpieza de cache: Se eliminaron {eliminados} registros inactivos del cache de ciudades")
 
+@limpiar_cache_ciudades.before_loop
 async def antes_de_limpiar():
     await client.wait_until_ready()
 
@@ -533,7 +536,9 @@ def obtener_botstats():
 @client.event
 async def on_ready():
 
-    print(f'Bot conectado como {client.user}')
+    if not limpiar_cache_ciudades.is_running():
+        limpiar_cache_ciudades.start()
+        logger.info("Temporizador de limpieza de caché iniciado con éxito.")
 
 # =========================
 # MENSAJES
