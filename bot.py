@@ -661,6 +661,7 @@ async def on_message(message):
     # =========================
     if message.content.startswith("!clima"):
         try:
+            inicio = time.perf_counter()
             contenido = message.content
             mensaje_procesado = ' '.join(contenido.split(' ')[1:]).strip()
             if not mensaje_procesado:
@@ -734,9 +735,12 @@ async def on_message(message):
             nombre_completo = f"{ciudad_limpia.get("nombre")}, {ciudad_limpia.get("region")}, {ciudad_limpia.get("pais")}" if ciudad_limpia.get("region") else f"{ciudad_limpia.get("nombre")}, {ciudad_limpia.get("pais")}"
             clima = formato_clima(nombre_completo, clima_response.get("current"), clima_response.get("daily"))
 
-            logger.info(f"Bot Clima: Renderizado exitoso para {nombre_completo}")
             await message.channel.send(clima)
-
+            
+            fin = time.perf_counter()
+            tiempo_total = fin - inicio
+            logger.info(f"Bot Clima: Renderizado exitoso para {nombre_completo}. Ejecucion en {tiempo_total:.4f} segundos.")
+            
             return
 
         except requests.exceptions.HTTPError as e:
