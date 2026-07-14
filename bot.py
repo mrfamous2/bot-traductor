@@ -536,6 +536,8 @@ def obtener_botstats():
 @client.event
 async def on_ready():
 
+    logger.info(f'Bot conectado como {client.user}')
+
     if not limpiar_cache_ciudades.is_running():
         limpiar_cache_ciudades.start()
         logger.info("Temporizador de limpieza de caché iniciado con éxito.")
