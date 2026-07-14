@@ -10,6 +10,15 @@ from dotenv import load_dotenv
 from deep_translator import GoogleTranslator
 
 load_dotenv()
+start_time = time.time()
+
+# =========================
+# CONFIGURACION DISCORD
+# =========================
+intents = discord.Intents.default()
+intents.message_content = True
+
+client = discord.Client(intents=intents)
 
 # =========================
 # CONFIGURACION LOGGER
